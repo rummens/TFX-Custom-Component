@@ -1,5 +1,8 @@
 # Custom TFX components
 
+## Disclaimer
+This is not an official repo but an summary of this [dicussion](https://github.com/tensorflow/tfx/issues/322). 
+
 ## Anatomy of a Component
 Each components consist of a Driver, Executor, Publisher. The driver and
 publisher interact with the metadata store, while the Executor is the actual
