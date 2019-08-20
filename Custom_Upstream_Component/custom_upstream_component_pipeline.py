@@ -22,7 +22,6 @@ import logging
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 import os
-from code2flow.code2flow import Code2Flow
 from tfx.components.evaluator.component import Evaluator
 from tfx.components.example_gen.csv_example_gen.component import CsvExampleGen
 from tfx.components.example_validator.component import ExampleValidator
@@ -44,36 +43,44 @@ from tfx.utils.dsl_utils import csv_input
 # Don't remove this random comment with airflow and DAG in the file like this,
 # since Airflow just uses a string search for the word airflow and DAG.
 # ---!>
-code2flow = Code2Flow(target=Code2Flow.LOCAL,
-                      trigger_new_run=False,
-                      pipeline_changed=True,
-                      assets_changed=True,
-                      pipeline_name="custom_upstream_component_pipeline",
-                      root_directory_cluster=os.getenv("TFX_SRC_DIR", "/tfx-src"),
-                      cluster_host="localhost:8080",
-                      number_of_gpus=0  # keep in mind that you have to manually start enough GPU in the cluster
-                      )
+_pipeline_name = 'chicago_taxi_simple'
+
+# This example assumes that the taxi data is stored in ~/taxi/data and the
+# taxi utility function is in ~/taxi.  Feel free to customize this as needed.
+_taxi_root = os.path.join(os.environ['HOME'], 'taxi')
+_data_root = os.path.join(_taxi_root, 'data', 'simple')
+# Python module file to inject customized logic into the TFX components. The
+# Transform and Trainer both require user-defined functions to run successfully.
+_module_file = os.path.join(_taxi_root, 'taxi_utils.py')
+# Path which can be listened to by the model server.  Pusher will output the
+# trained model here.
+_serving_model_dir = os.path.join(_taxi_root, 'serving_model', _pipeline_name)
+
+# Directory and data locations.  This example assumes all of the chicago taxi
+# example code and metadata library is relative to $HOME, but you can store
+# these files anywhere on your local filesystem.
+_tfx_root = os.path.join(os.environ['HOME'], 'tfx')
+_pipeline_root = os.path.join(_tfx_root, 'pipelines', _pipeline_name)
+# Sqlite ML-metadata db path.
+_metadata_path = os.path.join(_tfx_root, 'metadata', _pipeline_name,
+                              'metadata.db')
+
+# Airflow-specific configs; these will be passed directly to airflow
+_airflow_config = {
+    'schedule_interval': None,
+    'start_date': datetime.datetime(2019, 1, 1),
+}
+
+# Slack channel to push the model notifications to.
+_channel_id = 'my-channel-id'
+# Slack token to set up connection.
+_slack_token = os.getenv('SLACK_BOT_TOKEN', "EXAMPLE_TOKEN")
 
 # import the component (must happen this way because the path will change depending on deployment target).
 # the component_name must be equal to the directory name holding the component file (component.py),
 # but can be any string
 slack_component = code2flow.import_custom_component(component_name="custom_upstream_component",
                                                     path_to_calling_file=__file__)
-
-_taxi_root = code2flow.assets_root
-_tfx_root = os.path.join(_taxi_root, 'tfx')
-_data_root = os.path.join(_taxi_root, 'data/simple')
-_metadata_db_root = os.path.join(_tfx_root, 'metadata')
-# Python module file to inject customized logic into the TFX components. The
-# Transform and Trainer both require user-defined functions to run successfully.
-_taxi_module_file = os.path.join(_taxi_root, 'taxi_utils_slack.py')
-# Path which can be listened to by the model server.  Pusher will output the
-# trained model here.
-_serving_model_dir = os.path.join(_taxi_root, 'serving_model/taxi_slack')
-# Slack channel to push the model notifications to.
-_channel_id = 'my-channel-id'
-# Slack token to set up connection.
-_slack_token = os.getenv('SLACK_BOT_TOKEN', "EXAMPLE_TOKEN")
 
 
 def _create_pipeline():
@@ -145,16 +152,26 @@ def _create_pipeline():
         push_destination=pusher_pb2.PushDestination(
             filesystem=pusher_pb2.PushDestination.Filesystem(
                 base_directory=_serving_model_dir)))
-
-    return code2flow.create_pipeline(
-        components=[
-            example_gen, statistics_gen, infer_schema, validate_stats, transform,
+  
+   return pipeline.Pipeline(
+      pipeline_name=pipeline_name,
+      pipeline_root=pipeline_root,
+      components=[
+          example_gen, statistics_gen, infer_schema, validate_stats, transform,
             trainer, model_analyzer, model_validator, slack_validator, pusher
-        ],
-        enable_cache=True,
-        metadata_db_root=_metadata_db_root
-    )
+      ],
+      enable_cache=True,
+      metadata_connection_config=metadata.sqlite_metadata_connection_config(
+          metadata_path))
+
 
 
 # Deploy
-_ = code2flow.deploy(_create_pipeline())
+airflow_pipeline = AirflowDAGRunner(_airflow_config).run(
+    _create_pipeline(
+        pipeline_name=_pipeline_name,
+        pipeline_root=_pipeline_root,
+        data_root=_data_root,
+        module_file=_module_file,
+        serving_model_dir=_serving_model_dir,
+        metadata_path=_metadata_path))
