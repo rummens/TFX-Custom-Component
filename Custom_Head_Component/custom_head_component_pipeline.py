@@ -22,7 +22,6 @@ import logging
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 import os
-from code2flow.code2flow import Code2Flow
 from tfx.utils import channel
 from tfx.utils.types import TfxArtifact
 
@@ -30,15 +29,33 @@ from tfx.utils.types import TfxArtifact
 # Don't remove this random comment with airflow and DAG in the file like this,
 # since Airflow just uses a string search for the word airflow and DAG.
 # ---!>
-code2flow = Code2Flow(target=Code2Flow.LOCAL,
-                      trigger_new_run=False,
-                      pipeline_changed=True,
-                      assets_changed=True,
-                      pipeline_name="custom_head_component_pipeline",
-                      root_directory_cluster=os.getenv("TFX_SRC_DIR", "/tfx-src"),
-                      cluster_host="localhost:8080",
-                      number_of_gpus=0  # keep in mind that you have to manually start enough GPU in the cluster
-                      )
+_pipeline_name = 'chicago_taxi_simple'
+
+# This example assumes that the taxi data is stored in ~/taxi/data and the
+# taxi utility function is in ~/taxi.  Feel free to customize this as needed.
+_taxi_root = os.path.join(os.environ['HOME'], 'taxi')
+_data_root = os.path.join(_taxi_root, 'data', 'simple')
+# Python module file to inject customized logic into the TFX components. The
+# Transform and Trainer both require user-defined functions to run successfully.
+_module_file = os.path.join(_taxi_root, 'taxi_utils.py')
+# Path which can be listened to by the model server.  Pusher will output the
+# trained model here.
+_serving_model_dir = os.path.join(_taxi_root, 'serving_model', _pipeline_name)
+
+# Directory and data locations.  This example assumes all of the chicago taxi
+# example code and metadata library is relative to $HOME, but you can store
+# these files anywhere on your local filesystem.
+_tfx_root = os.path.join(os.environ['HOME'], 'tfx')
+_pipeline_root = os.path.join(_tfx_root, 'pipelines', _pipeline_name)
+# Sqlite ML-metadata db path.
+_metadata_path = os.path.join(_tfx_root, 'metadata', _pipeline_name,
+                              'metadata.db')
+
+# Airflow-specific configs; these will be passed directly to airflow
+_airflow_config = {
+    'schedule_interval': None,
+    'start_date': datetime.datetime(2019, 1, 1),
+}
 
 # import the component (must happen this way because the path will change depending on deployment target).
 # the component_name must be equal to the directory name holding the component file (component.py),
@@ -63,15 +80,26 @@ def _create_pipeline():
     my_first_awesome_component = custom_component.CustomHeadComponent(input_example=input_channel,
                                                                       string_execution_parameter="My awesome string",
                                                                       integer_execution_parameter=42)
-
-    return code2flow.create_pipeline(
-        components=[
-            my_first_awesome_component
-        ],
-        enable_cache=True,
-        metadata_db_root=_metadata_db_root
-    )
+  
+    return pipeline.Pipeline(
+      pipeline_name=pipeline_name,
+      pipeline_root=pipeline_root,
+      components=[
+          my_first_awesome_component
+      ],
+      enable_cache=True,
+      metadata_connection_config=metadata.sqlite_metadata_connection_config(
+          metadata_path))
+  
+  
 
 
 # Deploy
-_ = code2flow.deploy(_create_pipeline())
+airflow_pipeline = AirflowDAGRunner(_airflow_config).run(
+    _create_pipeline(
+        pipeline_name=_pipeline_name,
+        pipeline_root=_pipeline_root,
+        data_root=_data_root,
+        module_file=_module_file,
+        serving_model_dir=_serving_model_dir,
+        metadata_path=_metadata_path))
