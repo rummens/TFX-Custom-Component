@@ -27,11 +27,11 @@ explanation.
  the input file(s), makes some changes to it and then writes it back to the
  output file(s).
  
-## Head Component vs. Upstream Component
+## Head Component vs. Downstream Component
 A Head component is the first component in the pipeline, so it has to 
-manually create the first artifact(s). All other upstream component only 
-use the artifacts from its downstream components, so they don't have to 
-create artifacts themselves since they have been created by their downstream
+manually create the first artifact(s). All other downstream component only 
+use the artifacts from its upstream components, so they don't have to 
+create artifacts themselves since they have been created by their upstream
 components
 
 
@@ -52,5 +52,5 @@ the same *type_name*. The name itself can be chosen freely.
 
 ## Examples
 There are two examples in this repo, one for a [head component](./Custom_Head_Component) , assuming 
-your component is the first or only to run. The second one for an [upstream
+your component is the first or only to run. The second one for an [downstream
 component](./Custom_Upstream_Component) (in this case a modified version of the Model Validator)
