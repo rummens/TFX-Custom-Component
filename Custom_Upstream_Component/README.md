@@ -1,6 +1,6 @@
-# Custom TFX Upstream Component
+# Custom TFX Downstream Component
 
-To customize an upstream component is quite simple:
+To customize an downstream component is quite simple:
 1. choose the component you want to customize from the available [official component](https://github.com/tensorflow/tfx/tree/master/tfx/components)  
 2. Copy its folder (containing component.py, executor.py etc.) to your dev environment
 3. If you only want to change the behaviour of the component and don't
@@ -34,7 +34,7 @@ To customize an upstream component is quite simple:
   
   
 ## Example
-The following [example](./custom_upstream_component_pipeline.py) creates an upstream 
+The following [example](./custom_upstream_component_pipeline.py) creates an downstream 
 component which replaced the Model Validator to integrate it with Slack. 
 It was taken from the [official repo](https://github.com/tensorflow/tfx/tree/master/tfx/examples/custom_components/slack).
 
